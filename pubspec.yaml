@@ -1,0 +1,31 @@
+name: finance_app
+description: "A production-ready personal finance tracking Flutter application."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  intl: ^0.19.0
+  fl_chart: ^0.68.0
+  uuid: ^4.4.0
+  google_fonts: ^8.0.2
+  animations: ^2.1.1
+  flutter_svg: ^2.2.4
+  firebase_core: ^4.6.0
+  firebase_auth: ^6.3.0
+  cloud_firestore: ^6.2.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
