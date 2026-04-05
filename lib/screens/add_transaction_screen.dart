@@ -68,7 +68,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             
             // Category
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: InputDecoration(
                 labelText: 'Категория',
                 prefixIcon: const Icon(Icons.category),
@@ -171,6 +171,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
     ref.read(transactionsProvider.notifier).addTransaction(transaction);
     
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Успешно добавлено!'), backgroundColor: Colors.green),
     );

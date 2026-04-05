@@ -1,14 +1,15 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/goal.dart';
-import '../services/hive_service.dart';
+import '../services/firestore_service.dart';
 import 'package:uuid/uuid.dart';
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 final goalsProvider =
     StateNotifierProvider<GoalsNotifier, List<Goal>>((ref) {
-  final hiveService = ref.read(hiveServiceProvider);
-  return GoalsNotifier(hiveService)..init();
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return GoalsNotifier(firestoreService)..init();
 });
 
 // ─── Derived Providers ────────────────────────────────────────────────────────
@@ -39,12 +40,24 @@ final totalGoalContributionsProvider = Provider<double>((ref) {
 // ─── Notifier ────────────────────────────────────────────────────────────────
 
 class GoalsNotifier extends StateNotifier<List<Goal>> {
-  final HiveService _hiveService;
+  final FirestoreService? _firestoreService;
+  StreamSubscription? _sub;
 
-  GoalsNotifier(this._hiveService) : super([]);
+  GoalsNotifier(this._firestoreService) : super([]);
 
   void init() {
-    state = _hiveService.getGoals();
+    if (_firestoreService == null) return;
+    _sub = _firestoreService!.getGoalsStream().listen((goals) {
+      final sorted = List<Goal>.from(goals)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (mounted) state = sorted;
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 
   Future<void> addGoal({
@@ -52,6 +65,7 @@ class GoalsNotifier extends StateNotifier<List<Goal>> {
     required double targetAmount,
     required DateTime deadline,
   }) async {
+    if (_firestoreService == null) return;
     final goal = Goal(
       id: const Uuid().v4(),
       title: title,
@@ -59,11 +73,11 @@ class GoalsNotifier extends StateNotifier<List<Goal>> {
       deadline: deadline,
       createdAt: DateTime.now(),
     );
-    await _hiveService.saveGoal(goal);
-    state = [goal, ...state];
+    await _firestoreService!.saveGoal(goal);
   }
 
   Future<void> addMoneyToGoal(String goalId, double amount) async {
+    if (_firestoreService == null) return;
     final updatedList = state.map((g) {
       if (g.id == goalId) {
         g.addMoney(amount);
@@ -72,12 +86,13 @@ class GoalsNotifier extends StateNotifier<List<Goal>> {
     }).toList();
     // Persist the modified goal
     final goal = updatedList.firstWhere((g) => g.id == goalId);
-    await _hiveService.saveGoal(goal);
-    // Trigger rebuild
+    await _firestoreService!.saveGoal(goal);
+    // Trigger optimistic rebuild
     state = [...updatedList];
   }
 
   Future<void> withdrawMoneyFromGoal(String goalId, double amount) async {
+    if (_firestoreService == null) return;
     final updatedList = state.map((g) {
       if (g.id == goalId) {
         g.withdrawMoney(amount);
@@ -85,12 +100,12 @@ class GoalsNotifier extends StateNotifier<List<Goal>> {
       return g;
     }).toList();
     final goal = updatedList.firstWhere((g) => g.id == goalId);
-    await _hiveService.saveGoal(goal);
+    await _firestoreService!.saveGoal(goal);
     state = [...updatedList];
   }
 
   Future<void> deleteGoal(String goalId) async {
-    await _hiveService.deleteGoal(goalId);
-    state = state.where((g) => g.id != goalId).toList();
+    if (_firestoreService == null) return;
+    await _firestoreService!.deleteGoal(goalId);
   }
 }

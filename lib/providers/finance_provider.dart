@@ -1,49 +1,77 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/transaction.dart';
-import '../services/hive_service.dart';
+import '../services/firestore_service.dart';
 import 'goals_provider.dart';
 
 // Provides monthly manual set income
 final monthlyIncomeProvider =
     StateNotifierProvider<IncomeNotifier, double>((ref) {
-  final hiveService = ref.read(hiveServiceProvider);
-  return IncomeNotifier(hiveService)..init();
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return IncomeNotifier(firestoreService)..init();
 });
 
 class IncomeNotifier extends StateNotifier<double> {
-  final HiveService _hiveService;
+  final FirestoreService? _firestoreService;
+  StreamSubscription? _sub;
 
-  IncomeNotifier(this._hiveService) : super(0.0);
+  IncomeNotifier(this._firestoreService) : super(0.0);
 
   void init() {
-    state = _hiveService.getMonthlyIncome();
+    if (_firestoreService == null) return;
+    _sub = _firestoreService!.getMonthlyIncomeStream().listen((income) {
+      if (mounted) state = income;
+    });
+  }
+  
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 
   void updateIncome(double income) {
-    _hiveService.setMonthlyIncome(income);
-    state = income;
+    _firestoreService?.setMonthlyIncome(income);
+    state = income; // Optimistic update
   }
 }
 
 // Provides list of all transactions
 final transactionsProvider =
     StateNotifierProvider<TransactionsNotifier, List<Transaction>>((ref) {
-  final hiveService = ref.read(hiveServiceProvider);
-  return TransactionsNotifier(hiveService)..init();
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return TransactionsNotifier(firestoreService)..init();
 });
 
 class TransactionsNotifier extends StateNotifier<List<Transaction>> {
-  final HiveService _hiveService;
+  final FirestoreService? _firestoreService;
+  StreamSubscription? _sub;
 
-  TransactionsNotifier(this._hiveService) : super([]);
+  TransactionsNotifier(this._firestoreService) : super([]);
 
   void init() {
-    state = _hiveService.getTransactions();
+    if (_firestoreService == null) return;
+    _sub = _firestoreService!.getTransactionsStream().listen((transactions) {
+      final sorted = List<Transaction>.from(transactions)
+        ..sort((a, b) => b.date.compareTo(a.date));
+      if (mounted) state = sorted;
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 
   void addTransaction(Transaction t) {
-    _hiveService.addTransaction(t);
-    state = [t, ...state]..sort((a, b) => b.date.compareTo(a.date));
+    if (_firestoreService == null) return;
+    _firestoreService!.addTransaction(t);
+  }
+  
+  void deleteTransaction(String id) {
+    if (_firestoreService == null) return;
+    _firestoreService!.deleteTransaction(id);
   }
 }
 
@@ -108,10 +136,15 @@ final financialScoreProvider = Provider<int>((ref) {
     score = 10;
   } else {
     final expenseRatio = expenses / income;
-    if (expenseRatio > 0.9) score = 20; // Critical
-    else if (expenseRatio > 0.7) score = 50; // Approaching limit
-    else if (expenseRatio > 0.5) score = 80; // Good
-    else score = 100; // Excellent
+    if (expenseRatio > 0.9) {
+      score = 20;
+    } else if (expenseRatio > 0.7) {
+      score = 50;
+    } else if (expenseRatio > 0.5) {
+      score = 80;
+    } else {
+      score = 100;
+    }
   }
 
   // Goal logic

@@ -7,6 +7,7 @@ import '../models/transaction.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/theme.dart';
 import 'goal_details_screen.dart';
+import '../services/auth_service.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -33,7 +34,13 @@ class DashboardScreen extends ConsumerWidget {
             onPressed: () {
               _showIncomeSettingsDialog(context, ref);
             },
-          )
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+               await ref.read(authServiceProvider).signOut();
+            },
+          ),
         ],
       ),
       body: SingleChildScrollView(
